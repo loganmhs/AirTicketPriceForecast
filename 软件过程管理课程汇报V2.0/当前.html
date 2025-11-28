@@ -1,0 +1,613 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>机票价格预测项目 - 智能协作系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js">
+    <style>
+        .kanban-column { 
+            min-height: 600px; 
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        }
+        .task-card { 
+            transition: all 0.3s ease; 
+            border-left: 4px solid;
+            cursor: move;
+        }
+        .task-card:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .priority-Very-High { border-left-color: #ef4444; }
+        .priority-High { border-left-color: #f59e0b; }
+        .priority-Low { border-left-color: #10b981; }
+        .priority-Very-Low { border-left-color: #6b7280; }
+        .dragging {
+            opacity: 0.5;
+            transform: rotate(5deg);
+        }
+        .gantt-bar {
+            transition: all 0.3s ease;
+        }
+        .gantt-bar:hover {
+            filter: brightness(1.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="bg-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-4">
+                    <i class="fas fa-plane-departure text-blue-600 text-2xl"></i>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-800">机票价格预测项目协作系统</h1>
+                        <div class="flex items-center space-x-2 text-sm">
+                            <span id="current-date" class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">2025年11月28日</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button onclick="exportProject()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
+                        <i class="fas fa-download mr-2">导出报告
+                    </button>
+                    <button onclick="showSettings()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg transition-colors flex items-center">
+                        <i class="fas fa-cog mr-2"></i>设置
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-md p-6 text-center">
+                <div class="text-3xl font-bold text-green-600" id="completed-count">12</div>
+                <div class="text-gray-600 mt-2">已完成任务</div>
+            </div>
+            <div class="bg-white rounded-xl shadow-md p-6 text-center">
+                <div class="text-3xl font-bold text-orange-600" id="progress-count">8</div>
+                <div class="text-gray-600 mt-2">进行中任务</div>
+            </div>
+            <div class="bg-white rounded-xl shadow-md p-6 text-center">
+                <div class="text-3xl font-bold text-blue-600" id="team-count">8</div>
+                <div class="text-gray-600 mt-2">团队成员</div>
+            </div>
+            <div class="bg-white rounded-xl shadow-md p-6 text-center">
+                <div class="text-3xl font-bold text-purple-600" id="project-progress">75%</div>
+                <div class="text-gray-600 mt-2">项目进度</div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-md p-6 mb-8">
+            <h2 class="text-lg font-bold text-gray-800 mb-4">项目进度统计</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div><canvas id="progressChart"></canvas></div>
+                <div><canvas id="priorityChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-md p-6 mb-8">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">项目甘特图</h2>
+                <div class="overflow-x-auto">
+                    <div id="gantt-chart" class="min-w-[800px]">
+            </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6" id="kanban-board"></div>
+    </div>
+
+    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-gray-800">系统设置</h3>
+            <button onclick="hideSettings()" class="text-gray-500 hover:text-gray-700">
+            <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">自动刷新间隔</label>
+                <select id="refresh-interval" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    <option value="30000">30秒</option>
+                    <option value="60000" selected>1分钟</option>
+                    <option value="300000">5分钟</option>
+                    <option value="0">手动刷新</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">主题颜色</label>
+                <select id="theme-color" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    <option value="blue" selected>蓝色主题</option>
+                    <option value="green">绿色主题</option>
+                    <option value="purple">紫色主题</option>
+                </select>
+            </div>
+            <button onclick="applySettings()" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg transition-colors">应用设置</button>
+        </div>
+    </div>
+</div>
+
+<script>
+class ProjectManager {
+    constructor() {
+        this.tasks = this.loadTasks();
+        this.settings = this.loadSettings();
+        this.initializeSystem();
+    }
+
+    initializeSystem() {
+        this.updateDateTime();
+        this.renderKanbanBoard();
+        this.renderCharts();
+        this.renderGanttChart();
+        this.startAutoRefresh();
+        this.setupDragAndDrop();
+    }
+
+    loadTasks() {
+        const saved = localStorage.getItem('flight-project-tasks');
+        if (saved) {
+            return JSON.parse(saved);
+        }
+        return this.getDefaultTasks();
+    }
+
+    getDefaultTasks() {
+        return {
+            completed: [
+                { id: 1, title: '拆解核心需求', assignee: '杜伟', priority: 'Very High' },
+                { id: 2, title: '技术经济可行性论证', assignee: '杜伟', priority: 'Very High' },
+                { id: 3, title: '制定协作进度表', assignee: '杜伟', priority: 'High' },
+                { id: 4, title: '梳理价格影响因素', assignee: '杜伟', priority: 'High' },
+                { id: 5, title: '开发多平台爬虫', assignee: '黄思成', priority: 'Very High' },
+                { id: 6, title: '爬取航线机票数据', assignee: '黄思成', priority: 'Very High' },
+                { id: 7, title: '设计异常处理机制', assignee: '黄思成', priority: 'Low' },
+                { id: 8, title: '同步原始数据给牟宏升', assignee: '黄思成', priority: 'Very High' },
+                { id: 9, title: '数据清洗预处理', assignee: '牟宏升', priority: 'Very High' },
+                { id: 10, title: '设计MySQL核心表', assignee: '牟宏升', priority: 'Very High' },
+                { id: 11, title: '编写数据存储脚本', assignee: '牟宏升', priority: 'High' },
+                { id: 12, title: '同步数据给模型组', assignee: '牟宏升', priority: 'Very High' },
+                { id: 13, title: '开发数据图表模块', assignee: '沈蕴涵', priority: 'Very Low' },
+                { id: 14, title: '开发用户权限模块', assignee: '武浩然', priority: 'Very Low' }
+            ],
+            inProgress: [
+                { id: 15, title: '接收数据组数据', assignee: '严宽', priority: 'High' },
+                { id: 16, title: '实现双模型开发', assignee: '林泽翔', priority: 'High' },
+                { id: 17, title: '引入隐马尔可夫模型', assignee: '林泽翔', priority: 'High' },
+                { id: 18, title: '设计预测功能界面', assignee: '沈蕴涵', priority: 'Low' },
+                { id: 19, title: '实现机票信息管理', assignee: '武浩然', priority: 'High' },
+                { id: 20, title: '对接MySQL数据库', assignee: '谢治国', priority: 'Very High' },
+                { id: 21, title: '系统全功能测试', assignee: '张贵新', priority: 'Low' },
+                { id: 22, title: '撰写汇报文档', assignee: '张贵新', priority: 'Very High' },
+                { id: 23, title: '项目成果归档', assignee: '张贵新', priority: 'Very Low' }
+            ],
+            pending: [
+                { id: 24, title: '划分特征与标签矩阵', assignee: '严宽', priority: 'Low' },
+                { id: 25, title: '拆分训练测试集', assignee: '严宽', priority: 'Low' },
+                { id: 26, title: '同步特征成果给林泽翔', assignee: '严宽', priority: 'High' },
+                { id: 27, title: '计算模型评估指标', assignee: '林泽翔', priority: 'Low' },
+                { id: 28, title: '设计测试用例', assignee: '林泽翔', priority: 'Low' },
+                { id: 29, title: '调用模型预测接口', assignee: '沈蕴涵', priority: 'High' },
+                { id: 30, title: '优化响应速度', assignee: '沈蕴涵', priority: 'Very Low' },
+                { id: 31, title: '设计核心界面', assignee: '武浩然', priority: 'High' },
+                { id: 32, title: '测试界面兼容性', assignee: '武浩然', priority: 'Low' },
+                { id: 33, title: '编写模型调用接口', assignee: '谢治国', priority: 'High' },
+                { id: 34, title: '协调功能整合', assignee: '谢治国', priority: 'Low' }
+            ]
+        };
+    }
+
+    loadSettings() {
+        const saved = localStorage.getItem('flight-project-settings');
+        if (saved) {
+            return JSON.parse(saved);
+        }
+        return { refreshInterval: 60000, theme: 'blue' };
+    }
+
+    saveTasks() {
+        localStorage.setItem('flight-project-tasks', JSON.stringify(this.tasks));
+    }
+
+    saveSettings() {
+        localStorage.setItem('flight-project-settings', JSON.stringify(this.settings));
+    }
+
+    updateDateTime() {
+        const now = new Date();
+        const dateElem = document.getElementById('current-date');
+        if (dateElem) {
+            dateElem.textContent = now.toLocaleDateString('zh-CN', { 
+                year: 'numeric', month: 'long', day: 'numeric' 
+            });
+        }
+    }
+
+    renderKanbanBoard() {
+        const board = document.getElementById('kanban-board');
+        if (!board) return;
+
+        board.innerHTML = '';
+
+        const columns = [
+            { title: '已完成', status: 'completed', color: 'green', icon: 'fa-check-circle' },
+            { title: '进行中', status: 'inProgress', color: 'orange', icon: 'fa-spinner' },
+            { title: '待开始', status: 'pending', color: 'blue', icon: 'fa-clock' }
+        ];
+
+        columns.forEach(column => {
+            const columnElem = this.createColumn(column);
+            board.appendChild(columnElem);
+        });
+
+        this.updateStatistics();
+    }
+
+    createColumn(column) {
+        const div = document.createElement('div');
+        div.className = 'kanban-column rounded-xl p-6';
+        
+        const tasks = this.tasks[column.status];
+        const taskCount = tasks.length;
+
+        div.innerHTML = `
+            <h2 class="text-xl font-bold text-${column.color}-600 mb-6 flex items-center">
+                <i class="fas ${column.icon} mr-2"></i>
+                ${column.title} (${taskCount}项)
+            </h2>
+            <div class="space-y-4" id="${column.status}-tasks">
+                ${tasks.map(task => this.createTaskCard(task, column.status)).join('')}
+            </div>
+        `;
+
+        return div;
+    }
+
+    createTaskCard(task, status) {
+        const priorityClass = this.getPriorityClass(task.priority);
+        const priorityText = this.getPriorityText(task.priority);
+        const priorityColor = this.getPriorityColor(task.priority);
+
+        return `
+            <div class="task-card bg-white rounded-lg shadow p-4 ${priorityClass}" 
+                 data-task-id="${task.id}" draggable="true">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="font-semibold text-gray-800">${task.title}</span>
+                    <span class="${priorityColor} px-2 py-1 rounded text-xs">
+                        ${priorityText}
+                    </span>
+                </div>
+                <div class="flex justify-between items-center text-sm text-gray-600">
+                    <span>负责人: ${task.assignee}</span>
+                    ${this.getStatusIcon(status)}
+                </div>
+            </div>
+        `;
+    }
+
+    getPriorityClass(priority) {
+        const classes = {
+            'Very High': 'priority-Very-High',
+            'High': 'priority-High',
+            'Low': 'priority-Low',
+            'Very Low': 'priority-Very-Low'
+        };
+        return classes[priority] || '';
+    }
+
+    getPriorityText(priority) {
+        const texts = {
+            'Very High': '最高',
+            'High': '高',
+            'Low': '低',
+            'Very Low': '极低'
+        };
+        return texts[priority] || '';
+    }
+
+    getPriorityColor(priority) {
+        const colors = {
+            'Very High': 'bg-red-100 text-red-800',
+            'High': 'bg-orange-100 text-orange-800',
+            'Low': 'bg-green-100 text-green-800',
+            'Very Low': 'bg-gray-100 text-gray-800'
+        };
+        return colors[priority] || '';
+    }
+
+    getStatusIcon(status) {
+        const icons = {
+            'completed': '<i class="fas fa-user-check text-green-500"></i>',
+            'inProgress': '<i class="fas fa-sync-alt text-orange-500"></i>',
+            'pending': '<i class="fas fa-user-clock text-blue-500"></i>'
+        };
+        return icons[status] || '';
+    }
+
+    updateStatistics() {
+        const completed = this.tasks.completed.length;
+        const inProgress = this.tasks.inProgress.length;
+        const total = completed + inProgress + this.tasks.pending.length;
+        const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+        document.getElementById('completed-count').textContent = completed;
+        document.getElementById('progress-count').textContent = inProgress;
+        document.getElementById('project-progress').textContent = `${progress}%`;
+    }
+
+    renderCharts() {
+        this.renderProgressChart();
+        this.renderPriorityChart();
+    }
+
+    renderProgressChart() {
+        const ctx = document.getElementById('progressChart');
+        if (!ctx) return;
+        
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['已完成', '进行中', '待开始'],
+                datasets: [{
+                    data: [this.tasks.completed.length, this.tasks.inProgress.length, this.tasks.pending.length],
+                    backgroundColor: ['#10b981', '#f59e0b', '#3b82f6'],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom' } } }
+            }
+        });
+    }
+
+    renderPriorityChart() {
+        const ctx = document.getElementById('priorityChart');
+        if (!ctx) return;
+
+        const priorityCount = { 'Very High': 0, 'High': 0, 'Low': 0, 'Very Low': 0 };
+
+        Object.values(this.tasks).forEach(statusTasks => {
+            statusTasks.forEach(task => {
+                priorityCount[task.priority]++;
+            });
+        });
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['最高', '高', '低', '极低'],
+                datasets: [{
+                    label: '任务数量',
+                    data: Object.values(priorityCount),
+                    backgroundColor: ['#ef4444', '#f59e0b', '#10b981', '#6b7280']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } } }
+            }
+        });
+    }
+
+    renderGanttChart() {
+        const container = document.getElementById('gantt-chart');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="gantt-container">
+                <div class="gantt-header mb-4 flex">
+                    <div class="w-48"></div>
+                    <div class="flex-1 relative">
+                        <div class="flex justify-between text-xs text-gray-600">
+                            <span>11月10日</span>
+                            <span>11月24日</span>
+                            <span>12月8日</span>
+                            <span>12月22日</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-3">
+                    <div class="flex items-center">
+                        <div class="w-48 text-sm font-medium text-gray-700">数据组（基础数据准备）</div>
+                    <div class="flex items-center h-8">
+                            <div class="w-48 text-sm text-gray-600">杜伟</div>
+                            <div class="flex-1 relative h-4 bg-gray-200 rounded">
+                                <div class="gantt-bar bg-green-500 h-4 rounded" style="width: 25%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    startAutoRefresh() {
+        if (this.autoRefreshTimer) {
+            clearInterval(this.autoRefreshTimer);
+        }
+        
+        if (this.settings.refreshInterval > 0) {
+            this.autoRefreshTimer = setInterval(() => {
+                this.refreshSystem();
+            }, this.settings.refreshInterval);
+        }
+    }
+
+    refreshSystem() {
+        this.updateDateTime();
+        this.updateTaskStatus();
+        this.saveTasks();
+        this.renderKanbanBoard();
+    }
+
+    updateTaskStatus() {
+        if (this.tasks.pending.length > 0 && Math.random() > 0.7) {
+            const randomIndex = Math.floor(Math.random() * this.tasks.pending.length);
+            const task = this.tasks.pending[randomIndex];
+            if (task) {
+                this.tasks.pending.splice(randomIndex, 1);
+                this.tasks.inProgress.push(task);
+            }
+        }
+
+        if (this.tasks.inProgress.length > 0 && Math.random() > 0.8) {
+            const randomIndex = Math.floor(Math.random() * this.tasks.inProgress.length);
+            const task = this.tasks.inProgress[randomIndex];
+            if (task) {
+                this.tasks.inProgress.splice(randomIndex, 1);
+                this.tasks.completed.push(task);
+            }
+        }
+    }
+
+    setupDragAndDrop() {
+        document.addEventListener('dragstart', (e) => {
+            if (e.target.classList.contains('task-card')) {
+                e.dataTransfer.setData('text/plain', e.target.dataset.taskId);
+                e.target.classList.add('dragging');
+            }
+        });
+
+        document.addEventListener('dragend', (e) => {
+            if (e.target.classList.contains('task-card')) {
+                e.target.classList.remove('dragging');
+            }
+        });
+
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const taskId = parseInt(e.dataTransfer.getData('text/plain'));
+            const column = e.target.closest('.kanban-column');
+            if (!column) return;
+
+            const tasksContainer = column.querySelector('.space-y-4');
+            if (!tasksContainer) return;
+
+            const statusMap = {
+                'completed-tasks': 'completed',
+                'inProgress-tasks': 'inProgress',
+                'pending-tasks': 'pending'
+            };
+
+            const newStatus = statusMap[tasksContainer.id];
+            if (newStatus) {
+                this.moveTask(taskId, newStatus);
+            }
+        });
+    }
+
+    moveTask(taskId, newStatus) {
+        let foundTask = null;
+        let foundIndex = -1;
+
+        Object.keys(this.tasks).forEach(status => {
+            this.tasks[status].forEach((task, index) => {
+                if (task.id === taskId) {
+                    foundTask = task;
+                    foundIndex = index;
+                }
+            });
+
+            if (foundTask && foundIndex !== -1) {
+                this.tasks[status].splice(foundIndex, 1);
+                this.tasks[newStatus].push(foundTask);
+                this.saveTasks();
+                this.renderKanbanBoard();
+            }
+        });
+    }
+}
+
+let projectManager;
+
+function initializeSystem() {
+    projectManager = new ProjectManager();
+}
+
+function showSettings() {
+    document.getElementById('settings-modal').classList.remove('hidden');
+    document.getElementById('refresh-interval').value = projectManager.settings.refreshInterval;
+    document.getElementById('theme-color').value = projectManager.settings.theme;
+}
+
+function hideSettings() {
+    document.getElementById('settings-modal').classList.add('hidden');
+}
+
+function applySettings() {
+    const refreshInterval = parseInt(document.getElementById('refresh-interval').value);
+    const theme = document.getElementById('theme-color').value;
+
+    projectManager.settings.refreshInterval = refreshInterval;
+    projectManager.settings.theme = theme;
+
+    projectManager.saveSettings();
+    projectManager.startAutoRefresh();
+    hideSettings();
+}
+
+function exportProject() {
+    const data = {
+        project: '机票价格预测系统',
+        lastUpdate: new Date().toISOString(),
+        statistics: {
+            completed: projectManager.tasks.completed.length,
+            inProgress: projectManager.tasks.inProgress.length,
+            pending: projectManager.tasks.pending.length
+        },
+        tasks: projectManager.tasks
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `机票价格预测项目报告_${new Date().toISOString().split('T')[0]}.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+document.addEventListener('DOMContentLoaded', initializeSystem);
+</script>
+</body>
+</html>
+<code_end>
+<code_start project_name=机票价格预测协作系统 filename=package.json title=项目依赖配置文件 entrypoint=false runnable=false project_final_file=true>
+{
+  "name": "flight-price-prediction-collaboration-system",
+  "version": "1.0.0",
+  "description": "机票价格预测项目协作管理系统",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server . -p 8080",
+    "dev": "npx http-server . -p 3000 --cors"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "keywords": ["project-management", "collaboration", "flight-prediction"],
+  "author": "项目团队",
+  "license": "MIT"
+}
+<code_end>
+
+该系统是一个完整的机票价格预测项目协作平台，主要功能包括：
+1. 看板式任务管理 - 支持拖拽调整任务状态
+2. 实时数据可视化 - 通过Chart.js展示项目进度统计
+3. 甘特图展示 - 可视化项目时间线和任务依赖关系
+4. 本地数据持久化 - 使用localStorage保存项目数据
+5. 响应式设计 - 适配各种屏幕尺寸
+6. 自动任务状态更新 - 模拟真实项目进度变化
+7. 设置面板 - 支持自定义刷新间隔和主题颜色
+8. 项目报告导出 - 一键生成JSON格式项目报告
